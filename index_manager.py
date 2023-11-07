@@ -3,22 +3,25 @@ import time
 
 import openai
 import pinecone
+import yaml
 from llama_index.llms import OpenAI
 from llama_index.vector_stores import PineconeVectorStore
 from llama_index import GPTVectorStoreIndex, StorageContext, ServiceContext, download_loader, Response
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.prompts import PromptTemplate
 
+
 class IndexManager:
     def __init__(self):
-        os.environ['OPENAI_API_KEY'] = '<enter OpenAPI Key>'
-        os.environ["NOTION_INTEGRATION_TOKEN"] = "<notion token>"
+        with open('config.yaml', 'r') as file:
+            config = yaml.safe_load(file)
 
-        openai.api_key = os.getenv("OPENAI_API_KEY")
+        os.environ['OPENAI_API_KEY'] = config['openai_api_key']
+        os.environ['NOTION_INTEGRATION_TOKEN'] = config['notion_integration_token']
 
-        pinecone.init(api_key="6ea743a1-6a24-462e-92fd-27710d9ba215", environment="gcp-starter")
+        pinecone.init(api_key=config['pinecone_api_key'], environment="gcp-starter")
 
-        self.index_name = 'sherlock-holmes'
+        self.index_name = config['index_name']
         self.initialize_index()
 
     def initialize_index(self):
@@ -57,7 +60,7 @@ class IndexManager:
 
         qa_template = PromptTemplate(template)
         query_engine = self.index.as_query_engine(text_qa_template=qa_template,
-                                                  response_mode='refine',llm=OpenAI(model="gpt-4"))
+                                                  response_mode='refine', llm=OpenAI(model="gpt-4"))
 
         start_time = time.time()
         res: Response = query_engine.query(question)
@@ -74,7 +77,7 @@ class IndexManager:
                             "Remove the html and extract the text from this."},
                 {"role": "user", "content": user_query}
             ]
-            
+
         )
         print(openAI_response)
 
@@ -92,7 +95,7 @@ class IndexManager:
 
         qa_template = PromptTemplate(template)
         query_engine = self.index.as_query_engine(text_qa_template=qa_template,
-                                                  response_mode='refine',llm=OpenAI(model="gpt-4"))
+                                                  response_mode='refine', llm=OpenAI(model="gpt-4"))
 
         start_time = time.time()
         res: Response = query_engine.query(email_question)
