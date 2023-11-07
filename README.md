@@ -22,9 +22,18 @@ Building a gen-AI App
 
 ### This repo is the back end code for our bot-extension project, which you can find [here](https://github.com/tarunmugunthan/bot-extension)
 
-## Running the app locally 
-1. Install the requirements pip install -r requirements.txt
-2. Enter OpenAPI Key and Notion Token in app.py file
-3. Create a virtual environment: source <venv>/bin/activate
-4. uvicorn app:app --reload
+## Running the app locally
+1. Install virtualenv and activate it
+    > `apt install python3-virtualenv -y`
+    > 
+    > `virtualenv venv`
+    >
+    > `source venv/bin/activate`
 
+2. Install the requirements
+    > `pip install -r requirements.txt`
+
+3. Create a file `config.yaml` with the OpenAPI keys by copying `config.yaml.sample`.
+
+4. Run the service
+> `uvicorn app:app --host 0.0.0.0 --port 80`
