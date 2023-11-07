@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
-from IndexManager import IndexManager
+from index_manager import IndexManager
 
 manager = IndexManager()
 app = FastAPI()
@@ -31,8 +31,8 @@ async def process_data(data_request: str):
     return {"response": response}
 
 @app.get("/respond")
-async def get_response():
-    response = manager.get_response()
+async def get_response(question: str):
+    response = manager.get_response(question)
     # Convert non-serializable parts to serializable format
     return {"response": response}
 

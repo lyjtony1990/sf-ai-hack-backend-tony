@@ -1,0 +1,4 @@
+openai_api_key:
+notion_integration_token:
+pinecone_api_key:
+index_name: sherlock-holmes
