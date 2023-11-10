@@ -1,8 +1,5 @@
-import json
-
 import uvicorn
 from fastapi import FastAPI
-from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
 from index_manager import IndexManager
@@ -22,17 +19,15 @@ app.add_middleware(
 )
 
 
-class DataRequest(BaseModel):
-    data: str
-
-@app.get("/process")
-async def process_data(data_request: str):
-    response = manager.process(data_request)
+@app.get("/{index}/process")
+async def process_data(index: str, data_request: str):
+    response = manager.process(index, data_request)
     return {"response": response}
 
-@app.get("/respond")
-async def get_response(question: str):
-    response = manager.get_response(question)
+
+@app.get("/{index}/respond")
+async def get_response(index: str, question: str):
+    response = manager.get_response(index, question)
     # Convert non-serializable parts to serializable format
     return {"response": response}
 

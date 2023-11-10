@@ -1,14 +1,45 @@
 import os
 import time
+from dataclasses import dataclass
 
 import openai
 import pinecone
 import yaml
 from llama_index.llms import OpenAI
 from llama_index.vector_stores import PineconeVectorStore
-from llama_index import GPTVectorStoreIndex, StorageContext, ServiceContext, download_loader, Response
+from llama_index import GPTVectorStoreIndex, StorageContext, ServiceContext, Response, NotionPageReader
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.prompts import PromptTemplate
+
+
+@dataclass
+class IndexConfig:
+    name: str
+    pinecone_api_key: str
+    page_ids: []
+
+
+def initialize_index(index_config):
+    pinecone.init(api_key=index_config.pinecone_api_key, environment="gcp-starter")
+    index_name = index_config.name
+
+    if index_name not in pinecone.list_indexes():
+        pinecone.create_index(index_name, dimension=1536, metric='cosine')
+
+    pinecone_index = pinecone.Index(index_name)
+    vector_store = PineconeVectorStore(pinecone_index=pinecone_index)
+
+    storage_context = StorageContext.from_defaults(vector_store=vector_store)
+    service_context = ServiceContext.from_defaults(embed_model=OpenAIEmbedding(model='text-embedding-ada-002'),
+                                                   chunk_size=256,
+                                                   chunk_overlap=100)
+
+    reader = NotionPageReader()
+    documents = reader.load_data(page_ids=index_config.page_ids)
+
+    return GPTVectorStoreIndex.from_documents(documents,
+                                              storage_context=storage_context,
+                                              service_context=service_context)
 
 
 class IndexManager:
@@ -19,35 +50,16 @@ class IndexManager:
         os.environ['OPENAI_API_KEY'] = config['openai_api_key']
         os.environ['NOTION_INTEGRATION_TOKEN'] = config['notion_integration_token']
 
-        pinecone.init(api_key=config['pinecone_api_key'], environment="gcp-starter")
+        indexes = config.get('indexes', [])
+        self.indexMap = {}
 
-        self.index_name = config['index_name']
-        self.initialize_index()
+        for index in indexes:
+            index_config: IndexConfig = IndexConfig(index.get('name', ''),
+                                                    index.get('pinecone_api_key', ''),
+                                                    index.get('page_ids', []))
+            self.indexMap[index.get('name', '')] = initialize_index(index_config)
 
-    def initialize_index(self):
-        if self.index_name not in pinecone.list_indexes():
-            pinecone.create_index(self.index_name, dimension=1536, metric='cosine')
-
-        pinecone_index = pinecone.Index(self.index_name)
-        self.vector_store = PineconeVectorStore(pinecone_index=pinecone_index)
-
-        self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
-        self.embed_model = OpenAIEmbedding(model='text-embedding-ada-002')
-        self.chunk_size = 256
-        self.chunk_overlap = 100
-        self.service_context = ServiceContext.from_defaults(embed_model=self.embed_model, chunk_size=self.chunk_size, chunk_overlap = self.chunk_overlap)
-
-        integration_token = os.getenv("NOTION_INTEGRATION_TOKEN")
-        NotionPageReader = download_loader('NotionPageReader')
-        page_ids = ["87b45a97333c40eea3d53c1ea8f983cb"]
-        reader = NotionPageReader(integration_token=integration_token)
-        documents = reader.load_data(page_ids=page_ids)
-
-        self.index = GPTVectorStoreIndex.from_documents(documents,
-                                                        storage_context=self.storage_context,
-                                                        service_context=self.service_context)
-
-    def get_response(self, question):
+    def get_response(self, index, question):
         template = (
             "We have provided context information below. \n"
             "---------------------\n"
@@ -60,17 +72,21 @@ class IndexManager:
         )
 
         qa_template = PromptTemplate(template)
-        query_engine = self.index.as_query_engine(text_qa_template=qa_template,
-                                                  response_mode='compact', llm=OpenAI(model="gpt-3.5-turbo"), similarity_top_k=2)
+        index = self.indexMap[index]
+        if index is None:
+            return f"index '{index} not found!'"
+
+        query_engine = index.as_query_engine(text_qa_template=qa_template,
+                                             response_mode='compact', llm=OpenAI(model="gpt-3.5-turbo"),
+                                             similarity_top_k=2)
 
         start_time = time.time()
         res: Response = query_engine.query(question)
         print(f"time taken: {(time.time() - start_time)}seconds")
         print(res)
         return res.response
-    
 
-    def process(self, user_query):
+    def process(self, index, user_query):
         openAI_response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -96,8 +112,11 @@ class IndexManager:
         )
 
         qa_template = PromptTemplate(template)
-        query_engine = self.index.as_query_engine(text_qa_template=qa_template,
-                                                  response_mode='refine', llm=OpenAI(model="gpt-3.5-turbo"))
+        if index is None:
+            return f"index '{index} not found!'"
+
+        query_engine = index.as_query_engine(text_qa_template=qa_template,
+                                             response_mode='refine', llm=OpenAI(model="gpt-3.5-turbo"))
 
         start_time = time.time()
         res: Response = query_engine.query(email_question)

@@ -1,4 +1,13 @@
 openai_api_key:
 notion_integration_token:
-pinecone_api_key:
-index_name: sherlock-holmes
+
+indexes:
+  - name: vue
+    pinecone_api_key:
+    page_ids:
+    - 87b45a97333c40eea3d53c1ea8f983cb
+
+  - name: vetanya
+    pinecone_api_key:
+    page_ids:
+    - 7111549d93a843ed9688668c88d7857c
