@@ -5,11 +5,10 @@ from dataclasses import dataclass
 import openai
 import pinecone
 import yaml
+from llama_index import GPTVectorStoreIndex, Response
 from llama_index.llms import OpenAI
-from llama_index.vector_stores import PineconeVectorStore
-from llama_index import GPTVectorStoreIndex, StorageContext, ServiceContext, Response, NotionPageReader
-from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.prompts import PromptTemplate
+from llama_index.vector_stores import PineconeVectorStore
 
 
 @dataclass
@@ -21,25 +20,9 @@ class IndexConfig:
 
 def initialize_index(index_config):
     pinecone.init(api_key=index_config.pinecone_api_key, environment="gcp-starter")
-    index_name = index_config.name
-
-    if index_name not in pinecone.list_indexes():
-        pinecone.create_index(index_name, dimension=1536, metric='cosine')
-
-    pinecone_index = pinecone.Index(index_name)
-    vector_store = PineconeVectorStore(pinecone_index=pinecone_index)
-
-    storage_context = StorageContext.from_defaults(vector_store=vector_store)
-    service_context = ServiceContext.from_defaults(embed_model=OpenAIEmbedding(model='text-embedding-ada-002'),
-                                                   chunk_size=256,
-                                                   chunk_overlap=100)
-
-    reader = NotionPageReader()
-    documents = reader.load_data(page_ids=index_config.page_ids)
-
-    return GPTVectorStoreIndex.from_documents(documents,
-                                              storage_context=storage_context,
-                                              service_context=service_context)
+    pinecone_index = pinecone.Index(index_config.name)
+    vector_store = PineconeVectorStore(pinecone_index)
+    return GPTVectorStoreIndex.from_vector_store(vector_store=vector_store)
 
 
 class IndexManager:
