@@ -9,12 +9,14 @@ from llama_index import GPTVectorStoreIndex, Response
 from llama_index.llms import OpenAI
 from llama_index.prompts import PromptTemplate
 from llama_index.vector_stores import PineconeVectorStore
+from notion_client import Client
 
 
 @dataclass
 class IndexConfig:
     name: str
     pinecone_api_key: str
+    write_to_page: str
     page_ids: []
 
 
@@ -35,12 +37,15 @@ class IndexManager:
 
         indexes = config.get('indexes', [])
         self.indexMap = {}
+        self.writePageMap = {}
 
         for index in indexes:
             index_config: IndexConfig = IndexConfig(index.get('name', ''),
                                                     index.get('pinecone_api_key', ''),
+                                                    index.get('write_to_page', ''),
                                                     index.get('page_ids', []))
             self.indexMap[index.get('name', '')] = initialize_index(index_config)
+            self.writePageMap[index.get('name', '')] = index.get('write_to_page', '')
 
     def get_response(self, index, question):
         template = (
@@ -69,40 +74,28 @@ class IndexManager:
         print(res)
         return res.response
 
-    def process(self, index, user_query):
-        openAI_response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system",
-                 "content": "You are a helpful assistant, skilled in extracting information from an email. "
-                            "Remove the html and extract the text from this."},
-                {"role": "user", "content": user_query}
-            ]
-
-        )
-        print(openAI_response)
-
-        email_question = openAI_response.choices[0].message["content"]
-        template = (
-            "We have provided context information below. \n"
-            "---------------------\n"
-            "{context_str}"
-            "\n---------------------\n"
-            "Given this information, please answer the question: {query_str}.\n"
-            "If the context provides insufficient information and the question cannot be directly answered, "
-            "reply 'I am lacking knowledge to answer this questions. "
-            "Please enter manually then add it to knowledge base.'"
-        )
-
-        qa_template = PromptTemplate(template)
-        if index is None:
+    def write_to_notion(self, index, query, answer):
+        page_id = self.writePageMap[index]
+        if page_id is None:
             return f"index '{index} not found!'"
 
-        query_engine = index.as_query_engine(text_qa_template=qa_template,
-                                             response_mode='refine', llm=OpenAI(model="gpt-3.5-turbo"))
-
-        start_time = time.time()
-        res: Response = query_engine.query(email_question)
-        print(f"time taken: {(time.time() - start_time)}seconds")
-        print(res)
-        return res.response
+        client = Client(auth=os.environ.get('NOTION_INTEGRATION_TOKEN'))
+        client.blocks.children.append(
+            block_id=page_id,
+            children=[
+                {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": {
+                                    "content": query + ":" + answer
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        )

@@ -36,4 +36,4 @@ Building a gen-AI App
 3. Create a file `config.yaml` with the OpenAPI keys by copying `config.yaml.sample`.
 
 4. Run the service
-> `uvicorn app:app --host 0.0.0.0 --port 80`
+    > `uvicorn app:app --host 0.0.0.0 --port 80`
